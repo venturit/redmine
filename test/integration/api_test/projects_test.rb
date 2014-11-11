@@ -66,6 +66,53 @@ class Redmine::ApiTest::ProjectsTest < Redmine::ApiTest::Base
     assert json['projects'].first.has_key?('id')
   end
 
+  test "GET /projects.xml with include=issue_categories should return categories" do
+    get '/projects.xml?include=issue_categories'
+    assert_response :success
+    assert_equal 'application/xml', @response.content_type
+
+    assert_tag 'issue_categories',
+      :attributes => {:type => 'array'},
+      :child => {
+        :tag => 'issue_category',
+        :attributes => {
+          :id => '2',
+          :name => 'Recipes'
+        }
+      }
+  end
+
+  test "GET /projects.xml with include=trackers should return trackers" do
+    get '/projects.xml?include=trackers'
+    assert_response :success
+    assert_equal 'application/xml', @response.content_type
+
+    assert_tag 'trackers',
+      :attributes => {:type => 'array'},
+      :child => {
+        :tag => 'tracker',
+        :attributes => {
+          :id => '2',
+          :name => 'Feature request'
+        }
+      }
+  end
+
+  test "GET /projects.xml with include=enabled_modules should return enabled modules" do
+    get '/projects.xml?include=enabled_modules'
+    assert_response :success
+    assert_equal 'application/xml', @response.content_type
+
+    assert_tag 'enabled_modules',
+      :attributes => {:type => 'array'},
+      :child => {
+        :tag => 'enabled_module',
+        :attributes => {
+          :name => 'issue_tracking'
+        }
+      }
+  end
+
   test "GET /projects/:id.xml should return the project" do
     get '/projects/1.xml'
     assert_response :success
@@ -132,13 +179,28 @@ class Redmine::ApiTest::ProjectsTest < Redmine::ApiTest::Base
       }
   end
 
-  test "POST /projects.xml with valid parameters should create the project" do
-    Setting.default_projects_modules = ['issue_tracking', 'repository']
+  test "GET /projects/:id.xml with include=enabled_modules should return enabled modules" do
+    get '/projects/1.xml?include=enabled_modules'
+    assert_response :success
+    assert_equal 'application/xml', @response.content_type
 
-    assert_difference('Project.count') do
-      post '/projects.xml',
-        {:project => {:name => 'API test', :identifier => 'api-test'}},
-        credentials('admin')
+    assert_tag 'enabled_modules',
+      :attributes => {:type => 'array'},
+      :child => {
+        :tag => 'enabled_module',
+        :attributes => {
+          :name => 'issue_tracking'
+        }
+      }
+  end
+
+  test "POST /projects.xml with valid parameters should create the project" do
+    with_settings :default_projects_modules => ['issue_tracking', 'repository'] do
+      assert_difference('Project.count') do
+        post '/projects.xml',
+          {:project => {:name => 'API test', :identifier => 'api-test'}},
+          credentials('admin')
+      end
     end
 
     project = Project.order('id DESC').first

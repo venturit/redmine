@@ -142,7 +142,7 @@ bg:
   general_csv_separator: ','
   general_csv_decimal_separator: '.'
   general_csv_encoding: UTF-8
-  general_pdf_encoding: UTF-8
+  general_pdf_fontname: freesans
   general_first_day_of_week: '1'
 
   notice_account_updated: Профилът е обновен успешно.
@@ -340,6 +340,7 @@ bg:
   field_inherit_members: Наследяване на членовете на родителския проект
   field_generate_password: Генериране на парола
   field_must_change_passwd: Паролата трябва да бъде сменена при следващото влизане в Redmine
+  field_default_status: Състояние по подразбиране
 
   setting_app_title: Заглавие
   setting_app_subtitle: Описание
@@ -855,6 +856,8 @@ bg:
   label_group: Група
   label_group_plural: Групи
   label_group_new: Нова група
+  label_group_anonymous: Анонимни потребители
+  label_group_non_member: Потребители, които не са членове на проекта
   label_time_entry_plural: Използвано време
   label_version_sharing_none: Не споделен
   label_version_sharing_descendants: С подпроекти
@@ -919,6 +922,7 @@ bg:
   label_check_for_updates: Проверка за нови версии
   label_latest_compatible_version: Последна съвместима версия
   label_unknown_plugin: Непознат плъгин
+  label_add_projects: Добавяне на проекти
 
   button_login: Вход
   button_submit: Изпращане
@@ -1051,6 +1055,7 @@ bg:
   text_zoom_out: Намаляване
   text_warn_on_leaving_unsaved: Страницата съдържа незаписано съдържание, което може да бъде загубено, ако я напуснете.
   text_scm_path_encoding_note: "По подразбиране: UTF-8"
+  text_subversion_repository_note: 'Примери: file:///, http://, https://, svn://, svn+[tunnelscheme]://'
   text_git_repository_note: Празно и локално хранилище (например /gitrepo, c:\gitrepo)
   text_mercurial_repository_note: Локално хранилище (например /hgrepo, c:\hgrepo)
   text_scm_command: SCM команда
@@ -1111,3 +1116,6 @@ bg:
   description_date_from: Въведете начална дата
   description_date_to: Въведете крайна дата
   text_repository_identifier_info: 'Позволени са малки букви (a-z), цифри, тирета и _.<br />Промяна след създаването му не е възможна.'
+  field_users_visibility: Users visibility
+  label_users_visibility_all: All active users
+  label_users_visibility_members_of_visible_projects: Members of visible projects

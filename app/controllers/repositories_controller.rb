@@ -69,7 +69,7 @@ class RepositoriesController < ApplicationController
       @repository.merge_extra_info(attrs[:attrs_extra])
     end
     @repository.project = @project
-    if request.put? && @repository.save
+    if @repository.save
       redirect_to settings_project_path(@project, :tab => 'repositories')
     else
       render :action => 'edit'
@@ -94,7 +94,7 @@ class RepositoriesController < ApplicationController
     @committers = @repository.committers
     @users = @project.users
     additional_user_ids = @committers.collect(&:last).collect(&:to_i) - @users.collect(&:id)
-    @users += User.where(:id => additional_user_ids).all unless additional_user_ids.empty?
+    @users += User.where(:id => additional_user_ids).to_a unless additional_user_ids.empty?
     @users.compact!
     @users.sort!
     if request.post? && params[:committers].is_a?(Hash)
@@ -145,7 +145,7 @@ class RepositoriesController < ApplicationController
       limit(@changeset_pages.per_page).
       offset(@changeset_pages.offset).
       includes(:user, :repository, :parents).
-      all
+      to_a
 
     respond_to do |format|
       format.html { render :layout => false if request.xhr? }
@@ -397,16 +397,16 @@ class RepositoriesController < ApplicationController
   end
 
   def graph_commits_per_author(repository)
-    commits_by_author = Changeset.where("repository_id = ?", repository.id).group(:committer).count
-    commits_by_author.to_a.sort! {|x, y| x.last <=> y.last}
+    #data
+    stats = repository.stats_by_author
+    fields, commits_data, changes_data = [], [], []
+    stats.each do |name, hsh|
+      fields << name
+      commits_data << hsh[:commits_count]
+      changes_data << hsh[:changes_count]
+    end
 
-    changes_by_author = Change.joins(:changeset).where("#{Changeset.table_name}.repository_id = ?", repository.id).group(:committer).count
-    h = changes_by_author.inject({}) {|o, i| o[i.first] = i.last; o}
-
-    fields = commits_by_author.collect {|r| r.first}
-    commits_data = commits_by_author.collect {|r| r.last}
-    changes_data = commits_by_author.collect {|r| h[r.first] || 0}
-
+    #expand to 10 values if needed
     fields = fields + [""]*(10 - fields.length) if fields.length<10
     commits_data = commits_data + [0]*(10 - commits_data.length) if commits_data.length<10
     changes_data = changes_data + [0]*(10 - changes_data.length) if changes_data.length<10
@@ -414,6 +414,7 @@ class RepositoriesController < ApplicationController
     # Remove email address in usernames
     fields = fields.collect {|c| c.gsub(%r{<.+@.+>}, '') }
 
+    #prepare graph
     graph = SVG::Graph::BarHorizontal.new(
       :height => 30 * commits_data.length,
       :width => 800,

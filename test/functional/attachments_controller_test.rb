@@ -139,8 +139,7 @@ class AttachmentsControllerTest < ActionController::TestCase
     assert a.save
     assert_equal 'japanese-utf-8.txt', a.filename
 
-    str_japanese = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e"
-    str_japanese.force_encoding('UTF-8') if str_japanese.respond_to?(:force_encoding)
+    str_japanese = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e".force_encoding('UTF-8')
 
     get :show, :id => a.id
     assert_response :success
@@ -379,6 +378,16 @@ class AttachmentsControllerTest < ActionController::TestCase
   end
 
   def test_destroy_version_attachment
+    set_tmp_attachments_directory
+    @request.session[:user_id] = 2
+    assert_difference 'Attachment.count', -1 do
+      delete :destroy, :id => 9
+      assert_response 302
+    end
+  end
+
+  def test_destroy_version_attachment_with_issue_tracking_disabled
+    Project.find(1).disable_module! :issue_tracking
     set_tmp_attachments_directory
     @request.session[:user_id] = 2
     assert_difference 'Attachment.count', -1 do

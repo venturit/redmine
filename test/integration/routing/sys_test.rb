@@ -17,7 +17,7 @@
 
 require File.expand_path('../../../test_helper', __FILE__)
 
-class RoutingSysTest < ActionController::IntegrationTest
+class RoutingSysTest < ActionDispatch::IntegrationTest
   def test_sys
     assert_routing(
         { :method => 'get', :path => "/sys/projects" },
@@ -29,6 +29,10 @@ class RoutingSysTest < ActionController::IntegrationTest
       )
     assert_routing(
         { :method => 'get', :path => "/sys/fetch_changesets" },
+        { :controller => 'sys', :action => 'fetch_changesets' }
+      )
+    assert_routing(
+        { :method => 'post', :path => "/sys/fetch_changesets" },
         { :controller => 'sys', :action => 'fetch_changesets' }
       )
   end

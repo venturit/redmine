@@ -52,8 +52,7 @@ class GroupTest < ActiveSupport::TestCase
 
   def test_blank_name_error_message_fr
     set_language_if_valid 'fr'
-    str = "Nom doit \xc3\xaatre renseign\xc3\xa9(e)"
-    str.force_encoding('UTF-8') if str.respond_to?(:force_encoding)
+    str = "Nom doit \xc3\xaatre renseign\xc3\xa9(e)".force_encoding('UTF-8')
     g = Group.new
     assert !g.save
     assert_include str, g.errors.full_messages
@@ -125,7 +124,7 @@ class GroupTest < ActiveSupport::TestCase
   end
 
   def test_destroy_should_unassign_issues
-    group = Group.first
+    group = Group.find(10)
     Issue.where(:id => 1).update_all(["assigned_to_id = ?", group.id])
 
     assert group.destroy

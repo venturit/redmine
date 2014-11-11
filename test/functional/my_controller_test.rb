@@ -167,7 +167,7 @@ class MyControllerTest < ActionController::TestCase
                     :new_password_confirmation => 'secret1234'
     assert_response :success
     assert_template 'password'
-    assert_error_tag :content => /Password doesn&#x27;t match confirmation/
+    assert_error_tag :content => /Password doesn.*t match confirmation/
 
     # wrong password
     post :password, :password => 'wrongpassword',
@@ -183,6 +183,18 @@ class MyControllerTest < ActionController::TestCase
                     :new_password_confirmation => 'secret123'
     assert_redirected_to '/my/account'
     assert User.try_to_login('jsmith', 'secret123')
+  end
+
+  def test_change_password_kills_other_sessions
+    @request.session[:ctime] = (Time.now - 30.minutes).utc.to_i
+
+    jsmith = User.find(2)
+    jsmith.passwd_changed_on = Time.now
+    jsmith.save!
+
+    get 'account'
+    assert_response 302
+    assert flash[:error].match(/Your session has expired/)
   end
 
   def test_change_password_should_redirect_if_user_cannot_change_its_password

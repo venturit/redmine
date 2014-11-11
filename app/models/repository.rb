@@ -25,7 +25,7 @@ class Repository < ActiveRecord::Base
   IDENTIFIER_MAX_LENGTH = 255
 
   belongs_to :project
-  has_many :changesets, :order => "#{Changeset.table_name}.committed_on DESC, #{Changeset.table_name}.id DESC"
+  has_many :changesets, lambda{order("#{Changeset.table_name}.committed_on DESC, #{Changeset.table_name}.id DESC")}
   has_many :filechanges, :class_name => 'Change', :through => :changesets
 
   serialize :extra_info
@@ -45,6 +45,8 @@ class Repository < ActiveRecord::Base
   validates_format_of :identifier, :with => /\A(?!\d+$)[a-z0-9\-_]*\z/, :allow_blank => true
   # Checks if the SCM is enabled when creating a repository
   validate :repo_create_validation, :on => :create
+  validate :validate_repository_path
+  attr_protected :id
 
   safe_attributes 'identifier',
     'login',
@@ -264,7 +266,7 @@ class Repository < ActiveRecord::Base
         reorder("#{Changeset.table_name}.committed_on DESC, #{Changeset.table_name}.id DESC").
         limit(limit).
         preload(:user).
-        all
+        to_a
     else
       filechanges.
         where("path = ?", path.with_leading_slash).
@@ -313,7 +315,8 @@ class Repository < ActiveRecord::Base
       return @found_committer_users[committer] if @found_committer_users.has_key?(committer)
 
       user = nil
-      c = changesets.where(:committer => committer).includes(:user).first
+      c = changesets.where(:committer => committer).
+            includes(:user).references(:user).first
       if c && c.user
         user = c.user
       elsif committer.strip =~ /^([^<]+)(<(.*)>)?$/
@@ -405,7 +408,68 @@ class Repository < ActiveRecord::Base
     new_record? && project && Repository.where(:project_id => project.id).empty?
   end
 
+  # Returns a hash with statistics by author in the following form:
+  # {
+  #   "John Smith" => { :commits => 45, :changes => 324 },
+  #   "Bob" => { ... }
+  # }
+  #
+  # Notes:
+  # - this hash honnors the users mapping defined for the repository
+  def stats_by_author
+    commits = Changeset.where("repository_id = ?", id).select("committer, user_id, count(*) as count").group("committer, user_id")
+
+    #TODO: restore ordering ; this line probably never worked
+    #commits.to_a.sort! {|x, y| x.last <=> y.last}
+
+    changes = Change.joins(:changeset).where("#{Changeset.table_name}.repository_id = ?", id).select("committer, user_id, count(*) as count").group("committer, user_id")
+
+    user_ids = changesets.map(&:user_id).compact.uniq
+    authors_names = User.where(:id => user_ids).inject({}) do |memo, user|
+      memo[user.id] = user.to_s
+      memo
+    end
+
+    (commits + changes).inject({}) do |hash, element|
+      mapped_name = element.committer
+      if username = authors_names[element.user_id.to_i]
+        mapped_name = username
+      end
+      hash[mapped_name] ||= { :commits_count => 0, :changes_count => 0 }
+      if element.is_a?(Changeset)
+        hash[mapped_name][:commits_count] += element.count.to_i
+      else
+        hash[mapped_name][:changes_count] += element.count.to_i
+      end
+      hash
+    end
+  end
+
+  # Returns a scope of changesets that come from the same commit as the given changeset
+  # in different repositories that point to the same backend
+  def same_commits_in_scope(scope, changeset)
+    scope = scope.joins(:repository).where(:repositories => {:url => url, :root_url => root_url, :type => type})
+    if changeset.scmid.present?
+      scope = scope.where(:scmid => changeset.scmid)
+    else
+      scope = scope.where(:revision => changeset.revision)
+    end
+    scope
+  end
+
   protected
+
+  # Validates repository url based against an optional regular expression
+  # that can be set in the Redmine configuration file.
+  def validate_repository_path(attribute=:url)
+    regexp = Redmine::Configuration["scm_#{scm_name.to_s.downcase}_path_regexp"]
+    if changes[attribute] && regexp.present?
+      regexp = regexp.to_s.strip.gsub('%project%') {Regexp.escape(project.try(:identifier).to_s)}
+      unless send(attribute).to_s.match(Regexp.new("\\A#{regexp}\\z"))
+        errors.add(attribute, :invalid)
+      end
+    end
+  end
 
   def check_default
     if !is_default? && set_as_default?
@@ -435,10 +499,10 @@ class Repository < ActiveRecord::Base
     ci = "#{table_name_prefix}changesets_issues#{table_name_suffix}"
     cp = "#{table_name_prefix}changeset_parents#{table_name_suffix}"
 
-    connection.delete("DELETE FROM #{ch} WHERE #{ch}.changeset_id IN (SELECT #{cs}.id FROM #{cs} WHERE #{cs}.repository_id = #{id})")
-    connection.delete("DELETE FROM #{ci} WHERE #{ci}.changeset_id IN (SELECT #{cs}.id FROM #{cs} WHERE #{cs}.repository_id = #{id})")
-    connection.delete("DELETE FROM #{cp} WHERE #{cp}.changeset_id IN (SELECT #{cs}.id FROM #{cs} WHERE #{cs}.repository_id = #{id})")
-    connection.delete("DELETE FROM #{cs} WHERE #{cs}.repository_id = #{id}")
+    self.class.connection.delete("DELETE FROM #{ch} WHERE #{ch}.changeset_id IN (SELECT #{cs}.id FROM #{cs} WHERE #{cs}.repository_id = #{id})")
+    self.class.connection.delete("DELETE FROM #{ci} WHERE #{ci}.changeset_id IN (SELECT #{cs}.id FROM #{cs} WHERE #{cs}.repository_id = #{id})")
+    self.class.connection.delete("DELETE FROM #{cp} WHERE #{cp}.changeset_id IN (SELECT #{cs}.id FROM #{cs} WHERE #{cs}.repository_id = #{id})")
+    self.class.connection.delete("DELETE FROM #{cs} WHERE #{cs}.repository_id = #{id}")
     clear_extra_info_of_changesets
   end
 

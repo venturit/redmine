@@ -137,10 +137,6 @@ module ApplicationHelper
   def link_to_project(project, options={}, html_options = nil)
     if project.archived?
       h(project.name)
-    elsif options.key?(:action)
-      ActiveSupport::Deprecation.warn "#link_to_project with :action option is deprecated and will be removed in Redmine 3.0."
-      url = {:controller => 'projects', :action => 'show', :id => project}.merge(options)
-      link_to project.name, url, html_options
     else
       link_to project.name, project_path(project, options), html_options
     end
@@ -263,7 +259,7 @@ module ApplicationHelper
   # Renders a tree of projects as a nested set of unordered lists
   # The given collection may be a subset of the whole project tree
   # (eg. some intermediate nodes are private and can not be seen)
-  def render_project_nested_lists(projects)
+  def render_project_nested_lists(projects, &block)
     s = ''
     if projects.any?
       ancestors = []
@@ -283,7 +279,7 @@ module ApplicationHelper
         end
         classes = (ancestors.empty? ? 'root' : 'child')
         s << "<li class='#{classes}'><div class='#{classes}'>"
-        s << h(block_given? ? yield(project) : project.name)
+        s << h(block_given? ? capture(project, &block) : project.name)
         s << "</div>\n"
         ancestors << project
       end
@@ -349,7 +345,10 @@ module ApplicationHelper
   end
 
   def project_tree_options_for_select(projects, options = {})
-    s = ''
+    s = ''.html_safe
+    if options[:include_blank]
+      s << content_tag('option', '&nbsp;'.html_safe, :value => '')
+    end
     project_tree(projects) do |project, level|
       name_prefix = (level > 0 ? '&nbsp;' * 2 * level + '&#187; ' : '').html_safe
       tag_options = {:value => project.id}
@@ -499,7 +498,7 @@ module ApplicationHelper
       h(Setting.app_title)
     else
       b = []
-      ancestors = (@project.root? ? [] : @project.ancestors.visible.all)
+      ancestors = (@project.root? ? [] : @project.ancestors.visible.to_a)
       if ancestors.any?
         root = ancestors.shift
         b << link_to_project(root, {:jump => current_menu_item}, :class => 'root')
@@ -586,7 +585,7 @@ module ApplicationHelper
     end
     return '' if text.blank?
     project = options[:project] || @project || (obj && obj.respond_to?(:project) ? obj.project : nil)
-    only_path = options.delete(:only_path) == false ? false : true
+    @only_path = only_path = options.delete(:only_path) == false ? false : true
 
     text = text.dup
     macros = catch_macros(text)
@@ -1060,14 +1059,6 @@ module ApplicationHelper
     fields_for(*args, &proc)
   end
 
-  def labelled_remote_form_for(*args, &proc)
-    ActiveSupport::Deprecation.warn "ApplicationHelper#labelled_remote_form_for is deprecated and will be removed in Redmine 2.2."
-    args << {} unless args.last.is_a?(Hash)
-    options = args.last
-    options.merge!({:builder => Redmine::Views::LabelledFormBuilder, :remote => true})
-    form_for(*args, &proc)
-  end
-
   def error_messages_for(*objects)
     html = ""
     objects = objects.map {|o| o.is_a?(String) ? instance_variable_get("@#{o}") : o}.compact
@@ -1126,6 +1117,12 @@ module ApplicationHelper
     link_to_function(l(:button_check_all), "checkAll('#{form_name}', true)") +
     " | ".html_safe +
     link_to_function(l(:button_uncheck_all), "checkAll('#{form_name}', false)")
+  end
+
+  def toggle_checkboxes_link(selector)
+    link_to_function image_tag('toggle_check.png'),
+      "toggleCheckboxesBySelector('#{selector}')",
+      :title => "#{l(:button_check_all)} / #{l(:button_uncheck_all)}"
   end
 
   def progress_bar(pcts, options={})
@@ -1190,7 +1187,7 @@ module ApplicationHelper
                      "beforeShow: beforeShowDatePicker};")
         jquery_locale = l('jquery.locale', :default => current_language.to_s)
         unless jquery_locale == 'en'
-          tags << javascript_include_tag("i18n/jquery.ui.datepicker-#{jquery_locale}.js")
+          tags << javascript_include_tag("i18n/datepicker-#{jquery_locale}.js")
         end
         tags
       end
@@ -1214,7 +1211,7 @@ module ApplicationHelper
         source
       end
     end
-    super sources, options
+    super *sources, options
   end
 
   # Overrides Rails' image_tag with themes and plugins support.
@@ -1247,7 +1244,7 @@ module ApplicationHelper
         end
       end
     end
-    super sources, options
+    super *sources, options
   end
 
   # TODO: remove this in 2.5.0
@@ -1285,17 +1282,12 @@ module ApplicationHelper
   end
 
   def sanitize_anchor_name(anchor)
-    if ''.respond_to?(:encoding) || RUBY_PLATFORM == 'java'
-      anchor.gsub(%r{[^\s\-\p{Word}]}, '').gsub(%r{\s+(\-+\s*)?}, '-')
-    else
-      # TODO: remove when ruby1.8 is no longer supported
-      anchor.gsub(%r{[^\w\s\-]}, '').gsub(%r{\s+(\-+\s*)?}, '-')
-    end
+    anchor.gsub(%r{[^\s\-\p{Word}]}, '').gsub(%r{\s+(\-+\s*)?}, '-')
   end
 
   # Returns the javascript tags that are included in the html layout head
   def javascript_heads
-    tags = javascript_include_tag('jquery-1.8.3-ui-1.9.2-ujs-2.0.3', 'application')
+    tags = javascript_include_tag('jquery-1.11.1-ui-1.11.0-ujs-3.1.1', 'application')
     unless User.current.pref.warn_on_leaving_unsaved == '0'
       tags << "\n".html_safe + javascript_tag("$(window).load(function(){ warnLeavingUnsaved('#{escape_javascript l(:text_warn_on_leaving_unsaved)}'); });")
     end
